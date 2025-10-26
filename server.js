@@ -40,6 +40,15 @@ app.use((req, res, next) => {
   }
 });
 
+// Health check endpoint'i (Render.com ve client için)
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'Server çalışıyor', 
+    timestamp: new Date().toISOString() 
+  });
+});
+
 // Test endpoint'i
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Backend çalışıyor!', timestamp: new Date().toISOString() });
