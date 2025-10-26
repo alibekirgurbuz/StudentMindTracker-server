@@ -312,12 +312,15 @@ exports.saveSurveyResult = async (req, res) => {
     
     // Aynı öğrenci aynı anketi tekrar doldurmuş mu kontrol et
     const existingResultIndex = foundRehber.rehberDetay.anket_sonuclari.findIndex(
-      result => result.anketId === anketId && result.ogrenciId === ogrenciId
+      result => result.anketId === anketId && (result.ogrenciId === ogrenciId || result.ogrenciId === ogrenciId.toString())
     );
     
     if (existingResultIndex !== -1) {
-      // Mevcut sonucu güncelle
-      foundRehber.rehberDetay.anket_sonuclari[existingResultIndex] = surveyResult;
+      // Öğrenci bu anketi zaten çözmüş - hata döndür
+      return res.status(400).json({
+        success: false,
+        message: 'Bu anketi zaten çözdünüz. Bir anket sadece bir kez çözülebilir.'
+      });
     } else {
       // Yeni sonuç ekle
       foundRehber.rehberDetay.anket_sonuclari.push(surveyResult);

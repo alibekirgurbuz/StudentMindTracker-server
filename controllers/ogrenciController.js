@@ -394,3 +394,60 @@ exports.getOgrenciDetay = async (req, res) => {
     sendError(res, 'Server Hatası');
   }
 };
+
+// Öğrencinin anket sonuçlarını getir
+exports.getOgrenciAnketSonuclari = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log('=== getOgrenciAnketSonuclari Backend ===');
+    console.log('Aranan Öğrenci ID:', id);
+    
+    // Öğrenci kontrolü
+    const ogrenci = await User.findById(id);
+    if (!ogrenci || ogrenci.role !== 'Öğrenci') {
+      return sendNotFound(res, 'Öğrenci bulunamadı');
+    }
+    
+    console.log('Öğrenci bulundu:', ogrenci.ad, ogrenci.soyad);
+    
+    // Tüm rehberlerin anket sonuçlarında bu öğrencinin sonuçlarını ara
+    const rehberler = await User.find({ role: 'Rehber' });
+    console.log('Toplam Rehber Sayısı:', rehberler.length);
+    
+    let ogrenciSonuclari = [];
+    
+    for (const rehber of rehberler) {
+      if (rehber.rehberDetay && rehber.rehberDetay.anket_sonuclari) {
+        console.log(`Rehber ${rehber.ad} ${rehber.soyad} - Toplam Sonuç:`, rehber.rehberDetay.anket_sonuclari.length);
+        
+        // Bu öğrenciye ait sonuçları filtrele
+        const sonuclar = rehber.rehberDetay.anket_sonuclari.filter(
+          sonuc => {
+            const match = sonuc.ogrenciId === id || sonuc.ogrenciId === id.toString();
+            if (match) {
+              console.log('Eşleşen sonuç bulundu:', {
+                anketId: sonuc.anketId,
+                ogrenciId: sonuc.ogrenciId,
+                completedAt: sonuc.completedAt
+              });
+            }
+            return match;
+          }
+        );
+        ogrenciSonuclari = ogrenciSonuclari.concat(sonuclar);
+      }
+    }
+    
+    console.log('Toplam Bulunan Sonuç:', ogrenciSonuclari.length);
+    console.log('Sonuçlar:', JSON.stringify(ogrenciSonuclari, null, 2));
+    
+    res.json({
+      success: true,
+      data: ogrenciSonuclari
+    });
+  } catch (err) {
+    console.error('getOgrenciAnketSonuclari hatası:', err.message);
+    sendError(res, 'Server Hatası');
+  }
+};

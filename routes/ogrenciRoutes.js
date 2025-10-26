@@ -9,7 +9,8 @@ const {
   getOgrenciByUserId,
   getOgrencilerByRehberId,
   getOgrencilerBySinif,
-  getOgrenciDetay
+  getOgrenciDetay,
+  getOgrenciAnketSonuclari
 } = require('../controllers/ogrenciController');
 const { auth, adminAuth } = require('../middleware/auth');
 
@@ -33,6 +34,11 @@ router.get('/sinif/:sinif', getOgrencilerBySinif);
 // @route   GET /api/ogrenci/detay/:id
 // @desc    Öğrenci detay bilgilerini getir (tüm ilişkili verilerle)
 router.get('/detay/:id', getOgrenciDetay);
+
+// @route   GET /api/ogrenci/:id/anket-sonuclari
+// @desc    Öğrencinin anket sonuçlarını getir
+// NOT: Bu route /:id route'undan ÖNCE olmalı!
+router.get('/:id/anket-sonuclari', getOgrenciAnketSonuclari);
 
 // @route   GET /api/ogrenci/:id
 // @desc    ID'ye göre Öğrenci getir
