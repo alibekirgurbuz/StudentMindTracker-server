@@ -7,31 +7,67 @@ exports.getAllSurveys = async (req, res) => {
     // Şu an için anketler User modelinde rehberDetay içinde tutuluyor
     // Gelecekte ayrı bir Survey modeli oluşturulabilir
     const rehberler = await User.find({ role: 'Rehber' })
-      .select('rehberDetay.anketler ad soyad email');
+      .select('rehberDetay.anketler rehberDetay.anket_sonuclari ad soyad email')
+      .lean(); // MongoDB document'leri plain JavaScript object'e çevir
+    
+    console.log('\n=== DEBUG: getAllSurveys Backend ===');
+    console.log('Toplam rehber sayısı:', rehberler.length);
     
     let allSurveys = [];
     rehberler.forEach(rehber => {
       if (rehber.rehberDetay && rehber.rehberDetay.anketler) {
-        // Her anket için rehber bilgilerini ekle
-        const surveysWithRehberInfo = rehber.rehberDetay.anketler.map(survey => ({
-          ...survey,
-          rehberBilgisi: {
-            id: rehber._id,
-            ad: rehber.ad,
-            soyad: rehber.soyad,
-            email: rehber.email
-          }
-        }));
+        console.log(`\n📋 Rehber: ${rehber.ad} ${rehber.soyad}`);
+        console.log('Anket sayısı:', rehber.rehberDetay.anketler.length);
+        console.log('Sonuç sayısı:', rehber.rehberDetay.anket_sonuclari?.length || 0);
+        
+        // Her anket için rehber bilgilerini ve tamamlayan sayısını ekle
+        const surveysWithRehberInfo = rehber.rehberDetay.anketler.map(survey => {
+          // Bu anketi tamamlayan öğrenci sayısını hesapla
+          const anketSonuclari = rehber.rehberDetay.anket_sonuclari || [];
+          
+          console.log(`  📊 Anket: ${survey.baslik}`);
+          console.log(`     Anket ID: ${survey.id}`);
+          console.log(`     Anket Sonuçları:`, anketSonuclari.map(r => ({
+            anketId: r.anketId,
+            ogrenciId: r.ogrenciId
+          })));
+          
+          const completedCount = anketSonuclari.filter(
+            result => {
+              const match = result.anketId && survey.id && result.anketId.toString() === survey.id.toString();
+              if (match) {
+                console.log(`     ✅ Eşleşme bulundu: ${result.anketId} === ${survey.id}`);
+              }
+              return match;
+            }
+          ).length;
+          
+          console.log(`     Completed Count: ${completedCount}`);
+          
+          return {
+            ...survey,
+            completedCount, // Tamamlayan öğrenci sayısı
+            rehberBilgisi: {
+              id: rehber._id.toString(),
+              ad: rehber.ad,
+              soyad: rehber.soyad,
+              email: rehber.email
+            }
+          };
+        });
         allSurveys = allSurveys.concat(surveysWithRehberInfo);
       }
     });
+    
+    console.log('\n✅ Toplam anket sayısı:', allSurveys.length);
+    console.log('===================================\n');
     
     res.json({
       success: true,
       data: allSurveys
     });
   } catch (err) {
-    console.error(err.message);
+    console.error('❌ getAllSurveys hatası:', err.message);
     sendError(res, 'Server Hatası');
   }
 };
@@ -229,30 +265,46 @@ exports.getSurveysByRehberId = async (req, res) => {
   try {
     const { rehberId } = req.params;
     
-    const rehber = await User.findById(rehberId);
+    const rehber = await User.findById(rehberId).lean(); // lean() ekle
     if (!rehber || rehber.role !== 'Rehber') {
       return sendNotFound(res, 'Rehber bulunamadı');
     }
     
     const surveys = rehber.rehberDetay?.anketler || [];
+    const anketSonuclari = rehber.rehberDetay?.anket_sonuclari || [];
     
-    // Her anket için rehber bilgilerini ekle
-    const surveysWithRehberInfo = surveys.map(survey => ({
-      ...survey,
-      rehberBilgisi: {
-        id: rehber._id,
-        ad: rehber.ad,
-        soyad: rehber.soyad,
-        email: rehber.email
-      }
-    }));
+    console.log(`\n=== DEBUG: getSurveysByRehberId ===`);
+    console.log(`Rehber: ${rehber.ad} ${rehber.soyad}`);
+    console.log(`Anket sayısı: ${surveys.length}`);
+    console.log(`Sonuç sayısı: ${anketSonuclari.length}`);
+    
+    // Her anket için rehber bilgilerini ve tamamlayan sayısını ekle
+    const surveysWithRehberInfo = surveys.map(survey => {
+      // Bu anketi tamamlayan öğrenci sayısını hesapla
+      const completedCount = anketSonuclari.filter(
+        result => result.anketId && survey.id && result.anketId.toString() === survey.id.toString()
+      ).length;
+      
+      console.log(`  📊 Anket: ${survey.baslik}, ID: ${survey.id}, Completed: ${completedCount}`);
+      
+      return {
+        ...survey,
+        completedCount, // Tamamlayan öğrenci sayısı
+        rehberBilgisi: {
+          id: rehber._id.toString(),
+          ad: rehber.ad,
+          soyad: rehber.soyad,
+          email: rehber.email
+        }
+      };
+    });
     
     res.json({
       success: true,
       anketler: surveysWithRehberInfo
     });
   } catch (err) {
-    console.error(err.message);
+    console.error('❌ getSurveysByRehberId hatası:', err.message);
     sendError(res, 'Server Hatası');
   }
 };
