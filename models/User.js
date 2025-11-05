@@ -57,6 +57,10 @@ const UserSchema = new mongoose.Schema({
     anket_sonuclari: {
       type: [mongoose.Schema.Types.Mixed],
       default: []
+    },
+    analizSonuclari: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: []
     }
   }
 });
