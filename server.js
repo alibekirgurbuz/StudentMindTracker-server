@@ -18,9 +18,15 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "https://studentmindtracker.com",
-    methods: ["GET", "POST"]
-  }
+    origin: "*", // Tüm origin'lere izin ver (development için)
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  pingTimeout: 60000, // 60 saniye
+  pingInterval: 25000, // 25 saniye
+  upgradeTimeout: 30000, // 30 saniye
+  allowEIO3: true, // Engine.IO v3 desteği
+  transports: ['websocket', 'polling']
 });
 
 // Veritabanına bağlan
