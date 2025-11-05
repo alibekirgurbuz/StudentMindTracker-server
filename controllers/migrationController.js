@@ -39,27 +39,35 @@ exports.migrateRehberAnaliz = async (req, res) => {
     for (const rehber of rehberler) {
       const rehberInfo = `${rehber.ad} ${rehber.soyad} (${rehber._id})`;
       
-      // Eğer analizSonuclari alanı yoksa veya undefined ise ekle
-      if (!rehber.rehberDetay.analizSonuclari) {
-        console.log(`🔧 Güncelleniyor: ${rehberInfo}`);
-        
-        // rehberDetay objesini yeniden oluştur
-        rehber.rehberDetay = {
-          ...rehber.rehberDetay.toObject(),
-          analizSonuclari: []
-        };
-        
-        rehber.markModified('rehberDetay');
-        await rehber.save();
-        
-        updatedCount++;
-        results.push({ rehber: rehberInfo, status: 'updated' });
-        console.log(`   ✅ Güncellendi\n`);
-      } else {
-        console.log(`⏭️  Atlanıyor: ${rehberInfo} (zaten mevcut)\n`);
-        skippedCount++;
-        results.push({ rehber: rehberInfo, status: 'skipped' });
-      }
+      // Her zaman güncelle (force update)
+      console.log(`🔧 Güncelleniyor: ${rehberInfo}`);
+      console.log(`   Mevcut analizSonuclari:`, rehber.rehberDetay.analizSonuclari);
+      
+      // rehberDetay objesini tamamen yeniden oluştur
+      const currentRehberDetay = rehber.rehberDetay.toObject();
+      rehber.rehberDetay = {
+        siniflar: currentRehberDetay.siniflar || [],
+        ogrenciler: currentRehberDetay.ogrenciler || [],
+        anketler: currentRehberDetay.anketler || [],
+        anket_sonuclari: currentRehberDetay.anket_sonuclari || [],
+        analizSonuclari: currentRehberDetay.analizSonuclari || []
+      };
+      
+      rehber.markModified('rehberDetay');
+      await rehber.save();
+      
+      // Tekrar oku ve doğrula
+      const updatedRehber = await User.findById(rehber._id);
+      const hasField = updatedRehber.rehberDetay.analizSonuclari !== undefined;
+      
+      updatedCount++;
+      results.push({ 
+        rehber: rehberInfo, 
+        status: 'updated',
+        verified: hasField,
+        analizSonuclariType: typeof updatedRehber.rehberDetay.analizSonuclari
+      });
+      console.log(`   ✅ Güncellendi - Doğrulama: ${hasField ? 'BAŞARILI' : 'BAŞARISIZ'}\n`);
     }
 
     console.log('\n📈 Migration Özeti:');
