@@ -11,6 +11,7 @@ const rehberRoutes = require('./routes/rehberRoutes');
 const ogrenciRoutes = require('./routes/ogrenciRoutes');
 const surveyRoutes = require('./routes/surveyRoutes');
 const chatRoutes = require('./routes/chatRoutes');
+const analysisRoutes = require('./routes/analysisRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -202,6 +203,7 @@ app.use('/api/rehber', rehberRoutes);
 app.use('/api/ogrenci', ogrenciRoutes);
 app.use('/api/surveys', surveyRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/analysis', analysisRoutes);
 
 const PORT = process.env.PORT || 5000;
 

@@ -90,7 +90,8 @@ UserSchema.pre('save', function (next) {
         siniflar: [],
         ogrenciler: [],
         anketler: [],
-        anket_sonuclari: []
+        anket_sonuclari: [],
+        analizSonuclari: []
       };
     }
     // Öğrenci detayını temizle

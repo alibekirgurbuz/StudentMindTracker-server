@@ -20,7 +20,8 @@ exports.getAllRehberler = async (req, res) => {
           siniflar: [],
           ogrenciler: [],
           anketler: [],
-          anket_sonuclari: []
+          anket_sonuclari: [],
+          analizSonuclari: []
         }
       };
     });
@@ -56,7 +57,8 @@ exports.getRehberById = async (req, res) => {
         siniflar: [],
         ogrenciler: [],
         anketler: [],
-        anket_sonuclari: []
+        anket_sonuclari: [],
+        analizSonuclari: []
       }
     };
     
@@ -105,7 +107,8 @@ exports.createRehber = async (req, res) => {
       siniflar: siniflar || [],
       ogrenciler: [],
       anketler: [],
-      anket_sonuclari: []
+      anket_sonuclari: [],
+      analizSonuclari: []
     };
     
     await user.save();
@@ -194,7 +197,8 @@ exports.deleteRehber = async (req, res) => {
       siniflar: [],
       ogrenciler: [],
       anketler: [],
-      anket_sonuclari: []
+      anket_sonuclari: [],
+      analizSonuclari: []
     };
     await user.save();
     
@@ -226,7 +230,8 @@ exports.getRehberByUserId = async (req, res) => {
         siniflar: [],
         ogrenciler: [],
         anketler: [],
-        anket_sonuclari: []
+        anket_sonuclari: [],
+        analizSonuclari: []
       }
     };
     
