@@ -12,6 +12,7 @@ const ogrenciRoutes = require('./routes/ogrenciRoutes');
 const surveyRoutes = require('./routes/surveyRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const analysisRoutes = require('./routes/analysisRoutes');
+const migrationRoutes = require('./routes/migrationRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -204,6 +205,7 @@ app.use('/api/ogrenci', ogrenciRoutes);
 app.use('/api/surveys', surveyRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/analysis', analysisRoutes);
+app.use('/api/migration', migrationRoutes);
 
 const PORT = process.env.PORT || 5000;
 
