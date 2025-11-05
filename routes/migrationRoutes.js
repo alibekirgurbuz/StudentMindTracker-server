@@ -1,6 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { migrateRehberAnaliz } = require('../controllers/migrationController');
+const { migrateRehberAnaliz, checkRehberDetail } = require('../controllers/migrationController');
+
+// @route   GET /api/migration/check/:rehberId
+// @desc    Rehber detayını kontrol et (debug)
+// @access  Public
+router.get('/check/:rehberId', checkRehberDetail);
 
 // @route   POST /api/migration/rehber-analiz
 // @desc    Tüm rehberlere analizSonuclari alanını ekle

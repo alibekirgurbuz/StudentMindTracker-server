@@ -1,5 +1,27 @@
 const User = require('../models/User');
 
+// Rehber detayını kontrol et (debug için)
+exports.checkRehberDetail = async (req, res) => {
+  try {
+    const { rehberId } = req.params;
+    const rehber = await User.findById(rehberId);
+    
+    if (!rehber) {
+      return res.status(404).json({ success: false, message: 'Rehber bulunamadı' });
+    }
+    
+    res.json({
+      success: true,
+      rehberDetay: rehber.rehberDetay,
+      hasAnalizSonuclari: !!rehber.rehberDetay.analizSonuclari,
+      analizSonuclariType: typeof rehber.rehberDetay.analizSonuclari,
+      analizSonuclariValue: rehber.rehberDetay.analizSonuclari
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
 // Tüm rehberlere analizSonuclari alanını ekle
 exports.migrateRehberAnaliz = async (req, res) => {
   try {
