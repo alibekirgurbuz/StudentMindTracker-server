@@ -113,14 +113,14 @@ ${JSON.stringify(ogrenciCevaplari, null, 2)}`;
       anketSayisi: anketSonuclari.length
     };
     
-    if (!rehber.rehberDetay.analizSonuclari) {
-      rehber.rehberDetay.analizSonuclari = [];
-    }
+    // rehberDetay objesini yeniden oluştur (Mongoose Mixed type için)
+    const updatedRehberDetay = {
+      ...rehber.rehberDetay.toObject(),
+      analizSonuclari: [...(rehber.rehberDetay.analizSonuclari || []), analizKaydi]
+    };
     
-    rehber.rehberDetay.analizSonuclari.push(analizKaydi);
-    
-    // Mongoose'a Mixed tipindeki alanın değiştiğini bildirmek için markModified kullanıyoruz
-    rehber.markModified('rehberDetay.analizSonuclari');
+    rehber.rehberDetay = updatedRehberDetay;
+    rehber.markModified('rehberDetay');
     await rehber.save();
     
     console.log('✅ Analiz sonucu veritabanına kaydedildi');
