@@ -118,9 +118,13 @@ ${JSON.stringify(ogrenciCevaplari, null, 2)}`;
     }
     
     rehber.rehberDetay.analizSonuclari.push(analizKaydi);
+    
+    // Mongoose'a Mixed tipindeki alanın değiştiğini bildirmek için markModified kullanıyoruz
+    rehber.markModified('rehberDetay.analizSonuclari');
     await rehber.save();
     
     console.log('✅ Analiz sonucu veritabanına kaydedildi');
+    console.log('Kaydedilen analiz ID:', analizKaydi.id);
     console.log('===========================\n');
     
     // Frontend'e yanıt döndür
