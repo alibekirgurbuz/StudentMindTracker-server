@@ -96,3 +96,103 @@ exports.migrateRehberAnaliz = async (req, res) => {
     });
   }
 };
+
+// Rehberlerin öğrenci listelerini senkronize et
+exports.syncRehberOgrenciler = async (req, res) => {
+  try {
+    console.log('\n🔄 Rehber-Öğrenci Senkronizasyonu Başlatılıyor...\n');
+
+    // Tüm öğrencileri bul
+    const ogrenciler = await User.find({ role: 'Öğrenci' });
+    
+    console.log(`📊 Toplam ${ogrenciler.length} öğrenci bulundu\n`);
+
+    let addedCount = 0;
+    let skippedCount = 0;
+    let errorCount = 0;
+    const results = [];
+
+    for (const ogrenci of ogrenciler) {
+      const ogrenciInfo = `${ogrenci.ad} ${ogrenci.soyad} (${ogrenci._id})`;
+      const rehberID = ogrenci.ogrenciDetay?.rehberID;
+      
+      if (!rehberID) {
+        console.log(`⏭️  Atlanan: ${ogrenciInfo} - Rehber atanmamış`);
+        skippedCount++;
+        results.push({ 
+          ogrenci: ogrenciInfo, 
+          status: 'skipped',
+          reason: 'Rehber atanmamış'
+        });
+        continue;
+      }
+
+      // Rehberi bul
+      const rehber = await User.findById(rehberID);
+      if (!rehber || rehber.role !== 'Rehber') {
+        console.log(`❌ Hata: ${ogrenciInfo} - Rehber bulunamadı (${rehberID})`);
+        errorCount++;
+        results.push({ 
+          ogrenci: ogrenciInfo, 
+          status: 'error',
+          reason: 'Rehber bulunamadı'
+        });
+        continue;
+      }
+
+      // Rehberin öğrenciler listesinde olup olmadığını kontrol et
+      const ogrenciIdStr = ogrenci._id.toString();
+      const isInList = rehber.rehberDetay.ogrenciler.some(
+        id => id.toString() === ogrenciIdStr
+      );
+
+      if (isInList) {
+        console.log(`✓ ${ogrenciInfo} - Zaten listede`);
+        skippedCount++;
+        results.push({ 
+          ogrenci: ogrenciInfo, 
+          status: 'skipped',
+          reason: 'Zaten listede'
+        });
+      } else {
+        console.log(`🔧 ${ogrenciInfo} - Rehber ${rehber.ad} ${rehber.soyad}'ın listesine ekleniyor`);
+        rehber.rehberDetay.ogrenciler.push(ogrenci._id);
+        rehber.markModified('rehberDetay');
+        await rehber.save();
+        addedCount++;
+        results.push({ 
+          ogrenci: ogrenciInfo, 
+          rehber: `${rehber.ad} ${rehber.soyad}`,
+          status: 'added'
+        });
+      }
+    }
+
+    console.log('\n📈 Senkronizasyon Özeti:');
+    console.log(`   ➕ Eklenen: ${addedCount}`);
+    console.log(`   ⏭️  Atlanan: ${skippedCount}`);
+    console.log(`   ❌ Hata: ${errorCount}`);
+    console.log(`   📊 Toplam: ${ogrenciler.length}\n`);
+    
+    res.json({
+      success: true,
+      message: 'Senkronizasyon başarıyla tamamlandı',
+      summary: {
+        total: ogrenciler.length,
+        added: addedCount,
+        skipped: skippedCount,
+        errors: errorCount
+      },
+      details: results
+    });
+    
+  } catch (err) {
+    console.error('❌ Senkronizasyon hatası:', err.message);
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      message: 'Senkronizasyon sırasında hata oluştu',
+      error: err.message
+    });
+  }
+};

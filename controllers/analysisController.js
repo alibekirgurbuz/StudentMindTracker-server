@@ -18,10 +18,10 @@ exports.analyzeStudentSurveys = async (req, res) => {
       return sendNotFound(res, 'Rehber bulunamadı');
     }
     
-    // Rehberin öğrencilerini bul
+    // Rehberin öğrencilerini bul (ogrenciDetay.rehberID'ye göre filtrele - daha güvenli)
     const ogrenciler = await User.find({
-      _id: { $in: rehber.rehberDetay.ogrenciler },
-      role: 'Öğrenci'
+      role: 'Öğrenci',
+      'ogrenciDetay.rehberID': rehberId
     }).select('_id ad soyad');
     
     if (ogrenciler.length === 0) {

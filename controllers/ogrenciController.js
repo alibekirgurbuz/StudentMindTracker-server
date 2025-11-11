@@ -98,7 +98,7 @@ exports.createOgrenci = async (req, res) => {
       });
     }
     
-    // Rehber kontrolü (eğer rehberID verilmişse)
+    // Rehber kontrolü ve güncelleme (eğer rehberID verilmişse)
     if (rehberID) {
       const rehber = await User.findById(rehberID);
       if (!rehber || rehber.role !== 'Rehber') {
@@ -106,6 +106,13 @@ exports.createOgrenci = async (req, res) => {
           success: false,
           message: 'Rehber bulunamadı'
         });
+      }
+      
+      // Rehberin öğrenciler listesine bu öğrenciyi ekle
+      if (!rehber.rehberDetay.ogrenciler.includes(userId)) {
+        rehber.rehberDetay.ogrenciler.push(userId);
+        rehber.markModified('rehberDetay');
+        await rehber.save();
       }
     }
     
@@ -150,15 +157,42 @@ exports.updateOgrenci = async (req, res) => {
       return sendNotFound(res, 'Öğrenci bulunamadı');
     }
     
-    // Rehber kontrolü (eğer rehberID verilmişse)
-    if (rehberID) {
-      const rehber = await User.findById(rehberID);
-      if (!rehber || rehber.role !== 'Rehber') {
-        return res.status(404).json({
-          success: false,
-          message: 'Rehber bulunamadı'
-        });
+    // Rehber değişikliği varsa eski ve yeni rehberleri güncelle
+    if (rehberID !== undefined) {
+      const eskiRehberID = user.ogrenciDetay?.rehberID;
+      
+      // Yeni rehber kontrolü (null değilse)
+      if (rehberID) {
+        const yeniRehber = await User.findById(rehberID);
+        if (!yeniRehber || yeniRehber.role !== 'Rehber') {
+          return res.status(404).json({
+            success: false,
+            message: 'Rehber bulunamadı'
+          });
+        }
+        
+        // Yeni rehberin öğrenciler listesine bu öğrenciyi ekle
+        if (!yeniRehber.rehberDetay.ogrenciler.includes(id)) {
+          yeniRehber.rehberDetay.ogrenciler.push(id);
+          yeniRehber.markModified('rehberDetay');
+          await yeniRehber.save();
+        }
       }
+      
+      // Eski rehberden öğrenciyi çıkar
+      if (eskiRehberID && eskiRehberID.toString() !== rehberID?.toString()) {
+        const eskiRehber = await User.findById(eskiRehberID);
+        if (eskiRehber && eskiRehber.role === 'Rehber') {
+          eskiRehber.rehberDetay.ogrenciler = eskiRehber.rehberDetay.ogrenciler.filter(
+            ogrId => ogrId.toString() !== id.toString()
+          );
+          eskiRehber.markModified('rehberDetay');
+          await eskiRehber.save();
+        }
+      }
+      
+      // Öğrencinin rehberID'sini güncelle
+      user.ogrenciDetay.rehberID = rehberID;
     }
     
     // Detay bilgilerini güncelle
@@ -167,9 +201,6 @@ exports.updateOgrenci = async (req, res) => {
     }
     if (sinif !== undefined) {
       user.ogrenciDetay.sinif = sinif;
-    }
-    if (rehberID !== undefined) {
-      user.ogrenciDetay.rehberID = rehberID;
     }
     
     await user.save();
@@ -203,6 +234,19 @@ exports.deleteOgrenci = async (req, res) => {
     const user = await User.findById(id);
     if (!user || user.role !== 'Öğrenci') {
       return sendNotFound(res, 'Öğrenci bulunamadı');
+    }
+    
+    // Eğer öğrencinin bir rehberi varsa, o rehberin listesinden çıkar
+    const rehberID = user.ogrenciDetay?.rehberID;
+    if (rehberID) {
+      const rehber = await User.findById(rehberID);
+      if (rehber && rehber.role === 'Rehber') {
+        rehber.rehberDetay.ogrenciler = rehber.rehberDetay.ogrenciler.filter(
+          ogrId => ogrId.toString() !== id.toString()
+        );
+        rehber.markModified('rehberDetay');
+        await rehber.save();
+      }
     }
     
     // Detay bilgilerini temizle
