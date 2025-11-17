@@ -145,13 +145,31 @@ ${JSON.stringify(ogrenciCevaplari, null, 2)}`;
     
     console.log('✅ OpenAI analizi tamamlandı');
     
+    // Kullanılan anket ID'lerini topla ve anket bilgilerini al
+    const kullanilanAnketIdler = [...new Set(anketSonuclari.map(s => s.anketId).filter(Boolean))];
+    const kullanilanAnketler = [];
+    
+    if (rehber.rehberDetay && rehber.rehberDetay.anketler) {
+      kullanilanAnketIdler.forEach(anketId => {
+        const anket = rehber.rehberDetay.anketler.find(a => a.id === anketId || a.id?.toString() === anketId?.toString());
+        if (anket) {
+          kullanilanAnketler.push({
+            id: anket.id,
+            baslik: anket.baslik,
+            aciklama: anket.aciklama || ''
+          });
+        }
+      });
+    }
+    
     // Analiz sonucunu rehber koleksiyonuna kaydet
     const analizKaydi = {
       id: new Date().getTime().toString(),
       tarih: new Date(),
       analizSonucu: analizSonucu,
       ogrenciSayisi: ogrenciler.length,
-      anketSayisi: anketSonuclari.length
+      anketSayisi: anketSonuclari.length,
+      kullanilanAnketler: kullanilanAnketler
     };
     
     // rehberDetay objesini yeniden oluştur (Mongoose Mixed type için)
