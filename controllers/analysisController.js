@@ -63,11 +63,29 @@ exports.analyzeStudentSurveys = async (req, res) => {
     }
     
     // Öğrenci bilgileriyle anket sonuçlarını birleştir ve ölçek puanı hesapla
+    // Her öğrenci için anket bazlı puanları da hesapla
+    const ogrenciAnketPuaniMap = new Map(); // ogrenciID -> anketId -> puan
+    
+    anketSonuclari.forEach(sonuc => {
+      const ogrenciId = sonuc.ogrenciId?.toString();
+      const anketId = sonuc.anketId?.toString();
+      const cevaplar = sonuc.cevaplar || sonuc.sonuc;
+      
+      if (ogrenciId && anketId && cevaplar) {
+        const anketPuani = hesaplaOlcekPuani(cevaplar);
+        
+        if (!ogrenciAnketPuaniMap.has(ogrenciId)) {
+          ogrenciAnketPuaniMap.set(ogrenciId, new Map());
+        }
+        ogrenciAnketPuaniMap.get(ogrenciId).set(anketId, anketPuani);
+      }
+    });
+    
     const ogrenciCevaplari = anketSonuclari.map(sonuc => {
       const ogrenci = ogrenciler.find(o => o._id.toString() === sonuc.ogrenciId.toString());
       const cevaplar = sonuc.cevaplar || sonuc.sonuc;
       
-      // Ölçek puanını hesapla
+      // Genel ölçek puanını hesapla (tüm anketlerin toplamı)
       const olcekPuani = hesaplaOlcekPuani(cevaplar);
       
       return {
@@ -162,6 +180,25 @@ ${JSON.stringify(ogrenciCevaplari, null, 2)}`;
       });
     }
     
+    // Her öğrenci için anket bazlı puanları hazırla
+    const ogrenciAnketPuaniDetaylari = {};
+    ogrenciAnketPuaniMap.forEach((anketPuaniMap, ogrenciId) => {
+      const anketPuaniListesi = [];
+      
+      anketPuaniMap.forEach((puan, anketId) => {
+        const anket = kullanilanAnketler.find(a => a.id?.toString() === anketId || a.id === anketId);
+        if (anket) {
+          anketPuaniListesi.push({
+            anketId: anketId,
+            anketBaslik: anket.baslik,
+            puan: puan
+          });
+        }
+      });
+      
+      ogrenciAnketPuaniDetaylari[ogrenciId] = anketPuaniListesi;
+    });
+    
     // Analiz sonucunu rehber koleksiyonuna kaydet
     const analizKaydi = {
       id: new Date().getTime().toString(),
@@ -169,7 +206,8 @@ ${JSON.stringify(ogrenciCevaplari, null, 2)}`;
       analizSonucu: analizSonucu,
       ogrenciSayisi: ogrenciler.length,
       anketSayisi: anketSonuclari.length,
-      kullanilanAnketler: kullanilanAnketler
+      kullanilanAnketler: kullanilanAnketler,
+      ogrenciAnketPuaniDetaylari: ogrenciAnketPuaniDetaylari
     };
     
     // rehberDetay objesini yeniden oluştur (Mongoose Mixed type için)
