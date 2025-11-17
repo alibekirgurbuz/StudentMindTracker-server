@@ -161,7 +161,7 @@ ${JSON.stringify(ogrenciCevaplari, null, 2)}`;
     // OpenAI yanıtını al
     const analizSonucu = JSON.parse(completion.choices[0].message.content);
     
-    console.log('✅ OpenAI analizi tamamlandı');
+    console.log('✅ OpenAI genel analizi tamamlandı');
     
     // Kullanılan anket ID'lerini topla ve anket bilgilerini al
     const kullanilanAnketIdler = [...new Set(anketSonuclari.map(s => s.anketId).filter(Boolean))];
@@ -188,6 +188,102 @@ ${JSON.stringify(ogrenciCevaplari, null, 2)}`;
       });
     }
     
+    // Her anket için ayrı analiz yap
+    const anketBazliAnalizler = {};
+    
+    for (const anket of kullanilanAnketler) {
+      // Bu anketi çözen öğrencileri ve cevaplarını bul
+      const anketSonuclariBuAnket = anketSonuclari.filter(s => 
+        s.anketId?.toString() === anket.id?.toString() || s.anketId === anket.id
+      );
+      
+      if (anketSonuclariBuAnket.length === 0) continue;
+      
+      // Bu anket için öğrenci cevaplarını hazırla
+      const anketOgrenciCevaplari = anketSonuclariBuAnket.map(sonuc => {
+        const ogrenci = ogrenciler.find(o => o._id.toString() === sonuc.ogrenciId.toString());
+        const cevaplar = sonuc.cevaplar || sonuc.sonuc;
+        const anketPuani = hesaplaOlcekPuani(cevaplar);
+        
+        return {
+          ogrenciID: sonuc.ogrenciId,
+          ad: ogrenci?.ad || 'Bilinmiyor',
+          soyad: ogrenci?.soyad || 'Bilinmiyor',
+          cevaplar: cevaplar,
+          olcekPuani: anketPuani
+        };
+      });
+      
+      // Bu anket için OpenAI analizi yap
+      const anketPrompt = `Sen bir orta okul psikolojik danışmanısın.
+Aşağıda "${anket.baslik}" anketini çözen öğrencilerin cevapları ve ölçek puanları yer alıyor.
+Veriler JSON formatında, her öğrencinin cevapları "ogrenciID", "ad", "soyad", "cevaplar" ve "olcekPuani" alanlarını içeriyor.
+
+**Ölçek Puanı Hesaplama:** Her sorunun cevabı için, seçeneğin indis değerinin bir fazlası (indis 0 → puan 1, indis 1 → puan 2, vb.) toplanarak öğrencinin bu anket için ölçek puanı hesaplanmıştır.
+
+**Anket Bilgileri:**
+- Anket Adı: ${anket.baslik}
+- Soru Sayısı: ${anket.soruSayisi}
+- Seçenek Sayısı: ${anket.secenekSayisi}
+- Minimum Puan: ${anket.soruSayisi}
+- Maksimum Puan: ${anket.soruSayisi * anket.secenekSayisi}
+
+Görevin:
+1. Her öğrencinin bu anket için cevaplarını ve ölçek puanını analiz et.
+2. Ölçek puanını dikkate alarak bu anket kapsamındaki alanlara (duygusal durum, dikkat düzeyi, sosyal uyum, stres belirtileri vb.) özel olarak kısa ama profesyonel bir psikolojik değerlendirme yaz.
+3. Her öğrenci için bu anketin spesifik alanlarına odaklan.
+
+Çıktıyı tam geçerli JSON formatında döndür.
+Alan adları Türkçe ve küçük harflerle olmalı.
+Biçim tam olarak şu şekilde olmalı:
+{
+  "ogrenciler": [
+    {
+      "ogrenciID": "",
+      "ad": "",
+      "soyad": "",
+      "olcekPuani": 0,
+      "analiz": "..."
+    }
+  ]
+}
+
+Analizi bilimsel ve sade bir dille yap. Ek açıklama, yorum ya da kod bloğu ekleme.
+Yalnızca yukarıdaki JSON formatında yanıt ver.
+
+Öğrenci Verileri:
+${JSON.stringify(anketOgrenciCevaplari, null, 2)}`;
+      
+      try {
+        const anketCompletion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: 'Sen bir orta okul psikolojik danışmanısın. Öğrenci anket sonuçlarını analiz ediyorsun. Yanıtlarını her zaman geçerli JSON formatında ver.'
+            },
+            {
+              role: 'user',
+              content: anketPrompt
+            }
+          ],
+          temperature: 0.7,
+          response_format: { type: 'json_object' }
+        });
+        
+        const anketAnalizSonucu = JSON.parse(anketCompletion.choices[0].message.content);
+        anketBazliAnalizler[anket.id] = anketAnalizSonucu;
+        
+        console.log(`✅ ${anket.baslik} anketi için analiz tamamlandı`);
+      } catch (err) {
+        console.error(`❌ ${anket.baslik} anketi analiz hatası:`, err.message);
+        // Hata durumunda boş analiz ekle
+        anketBazliAnalizler[anket.id] = { ogrenciler: [] };
+      }
+    }
+    
+    console.log('✅ Tüm anket bazlı analizler tamamlandı');
+    
     // Kullanılan anketleri console'a yazdır
     console.log('\n=== Kullanılan Anketler ===');
     kullanilanAnketler.forEach(anket => {
@@ -199,7 +295,7 @@ ${JSON.stringify(ogrenciCevaplari, null, 2)}`;
     });
     console.log('===========================\n');
     
-    // Her öğrenci için anket bazlı puanları hazırla
+    // Her öğrenci için anket bazlı puanları ve analizleri hazırla
     const ogrenciAnketPuaniDetaylari = {};
     ogrenciAnketPuaniMap.forEach((anketPuaniMap, ogrenciId) => {
       const anketPuaniListesi = [];
@@ -207,12 +303,19 @@ ${JSON.stringify(ogrenciCevaplari, null, 2)}`;
       anketPuaniMap.forEach((puan, anketId) => {
         const anket = kullanilanAnketler.find(a => a.id?.toString() === anketId || a.id === anketId);
         if (anket) {
+          // Bu öğrenci için bu anketin analizini bul
+          const anketAnalizi = anketBazliAnalizler[anket.id];
+          const ogrenciAnalizi = anketAnalizi?.ogrenciler?.find(
+            o => o.ogrenciID?.toString() === ogrenciId || o.ogrenciID === ogrenciId
+          );
+          
           anketPuaniListesi.push({
             anketId: anketId,
             anketBaslik: anket.baslik,
             puan: puan,
             soruSayisi: anket.soruSayisi,
-            secenekSayisi: anket.secenekSayisi
+            secenekSayisi: anket.secenekSayisi,
+            analiz: ogrenciAnalizi?.analiz || ''
           });
         }
       });
