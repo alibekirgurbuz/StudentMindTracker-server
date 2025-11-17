@@ -171,14 +171,33 @@ ${JSON.stringify(ogrenciCevaplari, null, 2)}`;
       kullanilanAnketIdler.forEach(anketId => {
         const anket = rehber.rehberDetay.anketler.find(a => a.id === anketId || a.id?.toString() === anketId?.toString());
         if (anket) {
+          // Soru sayısını hesapla
+          const soruSayisi = anket.sorular?.length || 0;
+          
+          // Seçenek sayısını hesapla (ilk sorudan al, tüm sorular aynı seçenek sayısına sahip olmalı)
+          const secenekSayisi = anket.sorular?.[0]?.secenekler?.length || 0;
+          
           kullanilanAnketler.push({
             id: anket.id,
             baslik: anket.baslik,
-            aciklama: anket.aciklama || ''
+            aciklama: anket.aciklama || '',
+            soruSayisi: soruSayisi,
+            secenekSayisi: secenekSayisi
           });
         }
       });
     }
+    
+    // Kullanılan anketleri console'a yazdır
+    console.log('\n=== Kullanılan Anketler ===');
+    kullanilanAnketler.forEach(anket => {
+      console.log(`📋 ${anket.baslik}`);
+      console.log(`   - Soru Sayısı: ${anket.soruSayisi}`);
+      console.log(`   - Seçenek Sayısı: ${anket.secenekSayisi}`);
+      console.log(`   - Min Puan: ${anket.soruSayisi}`);
+      console.log(`   - Max Puan: ${anket.soruSayisi * anket.secenekSayisi}`);
+    });
+    console.log('===========================\n');
     
     // Her öğrenci için anket bazlı puanları hazırla
     const ogrenciAnketPuaniDetaylari = {};
@@ -191,7 +210,9 @@ ${JSON.stringify(ogrenciCevaplari, null, 2)}`;
           anketPuaniListesi.push({
             anketId: anketId,
             anketBaslik: anket.baslik,
-            puan: puan
+            puan: puan,
+            soruSayisi: anket.soruSayisi,
+            secenekSayisi: anket.secenekSayisi
           });
         }
       });
