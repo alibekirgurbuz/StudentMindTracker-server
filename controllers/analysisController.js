@@ -7,6 +7,33 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+// Ölçek puanı hesaplama fonksiyonu
+const hesaplaOlcekPuani = (cevaplar) => {
+  if (!cevaplar || !Array.isArray(cevaplar) || cevaplar.length === 0) {
+    return 0;
+  }
+  
+  let toplamPuan = 0;
+  
+  // Her bir cevap için puanı hesapla
+  cevaplar.forEach(cevapItem => {
+    // cevapItem: { soru: "...", secenekler: [...], cevap: "..." }
+    const { secenekler, cevap } = cevapItem;
+    
+    if (secenekler && Array.isArray(secenekler) && cevap) {
+      // Cevabın seçenekler dizisindeki indeksini bul
+      const cevapIndex = secenekler.indexOf(cevap);
+      
+      // İndeks bulunduysa (0 veya pozitif bir sayı), indeksin bir fazlasını ekle
+      if (cevapIndex >= 0) {
+        toplamPuan += (cevapIndex + 1);
+      }
+    }
+  });
+  
+  return toplamPuan;
+};
+
 // Rehberin öğrencilerinin anket sonuçlarını analiz et
 exports.analyzeStudentSurveys = async (req, res) => {
   try {
@@ -35,25 +62,33 @@ exports.analyzeStudentSurveys = async (req, res) => {
       return sendBadRequest(res, 'Analiz edilecek anket sonucu bulunamadı');
     }
     
-    // Öğrenci bilgileriyle anket sonuçlarını birleştir
+    // Öğrenci bilgileriyle anket sonuçlarını birleştir ve ölçek puanı hesapla
     const ogrenciCevaplari = anketSonuclari.map(sonuc => {
       const ogrenci = ogrenciler.find(o => o._id.toString() === sonuc.ogrenciId.toString());
+      const cevaplar = sonuc.cevaplar || sonuc.sonuc;
+      
+      // Ölçek puanını hesapla
+      const olcekPuani = hesaplaOlcekPuani(cevaplar);
+      
       return {
         ogrenciID: sonuc.ogrenciId,
         ad: ogrenci?.ad || 'Bilinmiyor',
         soyad: ogrenci?.soyad || 'Bilinmiyor',
-        cevaplar: sonuc.cevaplar || sonuc.sonuc
+        cevaplar: cevaplar,
+        olcekPuani: olcekPuani
       };
     });
     
     // OpenAI'ye gönderilecek prompt
     const prompt = `Sen bir orta okul psikolojik danışmanısın.
-Aşağıda öğrencilerin anket cevapları yer alıyor.
-Veriler JSON formatında, her öğrencinin cevapları "ogrenciID", "ad", "soyad" ve "cevaplar" alanlarını içeriyor.
+Aşağıda öğrencilerin anket cevapları ve ölçek puanları yer alıyor.
+Veriler JSON formatında, her öğrencinin cevapları "ogrenciID", "ad", "soyad", "cevaplar" ve "olcekPuani" alanlarını içeriyor.
+
+**Ölçek Puanı Hesaplama:** Her sorunun cevabı için, seçeneğin indis değerinin bir fazlası (indis 0 → puan 1, indis 1 → puan 2, vb.) toplanarak öğrencinin genel ölçek puanı hesaplanmıştır.
 
 Görevin:
-1. Her öğrencinin anket cevaplarını analiz et.
-2. Duygusal durum, dikkat düzeyi, sosyal uyum ve stres belirtilerine dair kısa ama profesyonel bir psikolojik değerlendirme yaz.
+1. Her öğrencinin anket cevaplarını ve ölçek puanını analiz et.
+2. Ölçek puanını dikkate alarak duygusal durum, dikkat düzeyi, sosyal uyum ve stres belirtilerine dair kısa ama profesyonel bir psikolojik değerlendirme yaz.
 3. Ardından tüm öğrencileri dikkate alarak genel bir sınıf analizi oluştur.
 
 Çıktıyı tam geçerli JSON formatında döndür.
@@ -65,6 +100,7 @@ Biçim tam olarak şu şekilde olmalı:
       "ogrenciID": "",
       "ad": "",
       "soyad": "",
+      "olcekPuani": 0,
       "analiz": "..."
     }
   ],
@@ -81,6 +117,11 @@ ${JSON.stringify(ogrenciCevaplari, null, 2)}`;
     console.log('Rehber:', rehber.ad, rehber.soyad);
     console.log('Öğrenci sayısı:', ogrenciler.length);
     console.log('Anket sonucu sayısı:', anketSonuclari.length);
+    
+    // Ölçek puanlarını logla
+    ogrenciCevaplari.forEach(ogr => {
+      console.log(`- ${ogr.ad} ${ogr.soyad}: Ölçek Puanı = ${ogr.olcekPuani}`);
+    });
     
     // OpenAI API'ye istek gönder
     const completion = await openai.chat.completions.create({
