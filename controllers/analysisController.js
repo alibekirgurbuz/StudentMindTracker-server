@@ -34,6 +34,76 @@ const hesaplaOlcekPuani = (cevaplar) => {
   return toplamPuan;
 };
 
+// Bulanık Mantık Fonksiyonları
+
+// Triangular üyelik fonksiyonu
+const triangular = (x, [a, b, c]) => {
+  if (x <= a || x >= c) return 0;
+  if (x === b) return 1;
+  if (x > a && x < b) return (x - a) / (b - a);
+  if (x > b && x < c) return (c - x) / (c - b);
+  return 0;
+};
+
+// Dinamik fuzzy model oluşturma
+const buildDynamicModel = (maxScore) => {
+  const lowEnd = maxScore * 0.40;
+  const midStart = maxScore * 0.25;
+  const midPeak = maxScore * 0.50;
+  const midEnd = maxScore * 0.75;
+  const highStart = maxScore * 0.60;
+  const highEnd = maxScore;
+  
+  return {
+    inputMF: {
+      low: [0, 0, lowEnd],
+      mid: [midStart, midPeak, midEnd],
+      high: [highStart, highEnd, highEnd]
+    },
+    outputMF: {
+      low: [0, 0, 40],
+      mid: [30, 50, 70],
+      high: [60, 85, 100]
+    }
+  };
+};
+
+// Kuralları uygulayan fonksiyon
+const applyRules = (score, model) => {
+  return {
+    low: triangular(score, model.inputMF.low),
+    mid: triangular(score, model.inputMF.mid),
+    high: triangular(score, model.inputMF.high)
+  };
+};
+
+// Defuzzification (COG - Center of Gravity yöntemi)
+const defuzzify = (ruleStrengths, model) => {
+  const points = [];
+  
+  const pushPoint = (mf, strength) => {
+    for (let x = 0; x <= 100; x++) {
+      const mu = Math.min(strength, triangular(x, mf));
+      points.push({
+        x: x,
+        mu: mu
+      });
+    }
+  };
+  
+  pushPoint(model.outputMF.low, ruleStrengths.low);
+  pushPoint(model.outputMF.mid, ruleStrengths.mid);
+  pushPoint(model.outputMF.high, ruleStrengths.high);
+  
+  let num = 0, den = 0;
+  points.forEach(p => {
+    num += p.x * p.mu;
+    den += p.mu;
+  });
+  
+  return den === 0 ? 0 : num / den;
+};
+
 // Rehberin öğrencilerinin anket sonuçlarını analiz et
 exports.analyzeStudentSurveys = async (req, res) => {
   try {
@@ -81,6 +151,25 @@ exports.analyzeStudentSurveys = async (req, res) => {
       }
     });
     
+    // Genel analiz için maksimum puanı hesapla (tüm anketlerin maksimum puanlarının toplamı)
+    // Önce kullanılan anketleri bul
+    const kullanilanAnketIdlerGenel = [...new Set(anketSonuclari.map(s => s.anketId).filter(Boolean))];
+    let genelMaxPuan = 0;
+    
+    if (rehber.rehberDetay && rehber.rehberDetay.anketler) {
+      kullanilanAnketIdlerGenel.forEach(anketId => {
+        const anket = rehber.rehberDetay.anketler.find(a => a.id === anketId || a.id?.toString() === anketId?.toString());
+        if (anket) {
+          const soruSayisi = anket.sorular?.length || 0;
+          const secenekSayisi = anket.sorular?.[0]?.secenekler?.length || 0;
+          genelMaxPuan += soruSayisi * secenekSayisi;
+        }
+      });
+    }
+    
+    // Genel analiz için fuzzy model oluştur
+    const genelFuzzyModel = buildDynamicModel(genelMaxPuan || 100);
+    
     const ogrenciCevaplari = anketSonuclari.map(sonuc => {
       const ogrenci = ogrenciler.find(o => o._id.toString() === sonuc.ogrenciId.toString());
       const cevaplar = sonuc.cevaplar || sonuc.sonuc;
@@ -88,12 +177,17 @@ exports.analyzeStudentSurveys = async (req, res) => {
       // Genel ölçek puanını hesapla (tüm anketlerin toplamı)
       const olcekPuani = hesaplaOlcekPuani(cevaplar);
       
+      // Fuzzy skor hesapla
+      const rules = applyRules(olcekPuani, genelFuzzyModel);
+      const fuzzySkor = defuzzify(rules, genelFuzzyModel);
+      
       return {
         ogrenciID: sonuc.ogrenciId,
         ad: ogrenci?.ad || 'Bilinmiyor',
         soyad: ogrenci?.soyad || 'Bilinmiyor',
         cevaplar: cevaplar,
-        olcekPuani: olcekPuani
+        olcekPuani: olcekPuani,
+        fuzzySkor: Math.round(fuzzySkor * 100) / 100 // İki ondalık basamağa yuvarla
       };
     });
     
@@ -136,9 +230,9 @@ ${JSON.stringify(ogrenciCevaplari, null, 2)}`;
     console.log('Öğrenci sayısı:', ogrenciler.length);
     console.log('Anket sonucu sayısı:', anketSonuclari.length);
     
-    // Ölçek puanlarını logla
+    // Ölçek puanlarını ve fuzzy skorlarını logla
     ogrenciCevaplari.forEach(ogr => {
-      console.log(`- ${ogr.ad} ${ogr.soyad}: Ölçek Puanı = ${ogr.olcekPuani}`);
+      console.log(`- ${ogr.ad} ${ogr.soyad}: Ölçek Puanı = ${ogr.olcekPuani}, Fuzzy Skor = ${ogr.fuzzySkor}`);
     });
     
     // OpenAI API'ye istek gönder
@@ -199,18 +293,29 @@ ${JSON.stringify(ogrenciCevaplari, null, 2)}`;
       
       if (anketSonuclariBuAnket.length === 0) continue;
       
+      // Bu anket için maksimum puanı hesapla
+      const anketMaxPuan = anket.soruSayisi * anket.secenekSayisi;
+      
+      // Bu anket için fuzzy model oluştur
+      const anketFuzzyModel = buildDynamicModel(anketMaxPuan || 100);
+      
       // Bu anket için öğrenci cevaplarını hazırla
       const anketOgrenciCevaplari = anketSonuclariBuAnket.map(sonuc => {
         const ogrenci = ogrenciler.find(o => o._id.toString() === sonuc.ogrenciId.toString());
         const cevaplar = sonuc.cevaplar || sonuc.sonuc;
         const anketPuani = hesaplaOlcekPuani(cevaplar);
         
+        // Fuzzy skor hesapla
+        const rules = applyRules(anketPuani, anketFuzzyModel);
+        const fuzzySkor = defuzzify(rules, anketFuzzyModel);
+        
         return {
           ogrenciID: sonuc.ogrenciId,
           ad: ogrenci?.ad || 'Bilinmiyor',
           soyad: ogrenci?.soyad || 'Bilinmiyor',
           cevaplar: cevaplar,
-          olcekPuani: anketPuani
+          olcekPuani: anketPuani,
+          fuzzySkor: Math.round(fuzzySkor * 100) / 100 // İki ondalık basamağa yuvarla
         };
       });
       
@@ -309,12 +414,19 @@ ${JSON.stringify(anketOgrenciCevaplari, null, 2)}`;
             o => o.ogrenciID?.toString() === ogrenciId || o.ogrenciID === ogrenciId
           );
           
+          // Bu anket için fuzzy skor hesapla
+          const anketMaxPuan = anket.soruSayisi * anket.secenekSayisi;
+          const anketFuzzyModel = buildDynamicModel(anketMaxPuan || 100);
+          const rules = applyRules(puan, anketFuzzyModel);
+          const fuzzySkor = defuzzify(rules, anketFuzzyModel);
+          
           anketPuaniListesi.push({
             anketId: anketId,
             anketBaslik: anket.baslik,
             puan: puan,
             soruSayisi: anket.soruSayisi,
             secenekSayisi: anket.secenekSayisi,
+            fuzzySkor: Math.round(fuzzySkor * 100) / 100, // İki ondalık basamağa yuvarla
             analiz: ogrenciAnalizi?.analiz || ''
           });
         }
