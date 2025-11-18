@@ -205,6 +205,9 @@ exports.analyzeStudentSurveys = async (req, res) => {
       };
     });
     
+    // OpenAI'ye gönderilecek verilerden fuzzyRules'ı kaldır
+    const ogrenciCevaplariOpenAI = ogrenciCevaplari.map(({ fuzzyRules, ...rest }) => rest);
+    
     // OpenAI'ye gönderilecek prompt
     const prompt = `Sen bir orta okul psikolojik danışmanısın.
 Aşağıda öğrencilerin anket cevapları ve ölçek puanları yer alıyor.
@@ -256,9 +259,6 @@ ${JSON.stringify(ogrenciCevaplariOpenAI, null, 2)}`;
       console.log(`   Fuzzy Skor (Defuzzification): ${ogr.fuzzySkor}`);
     });
     console.log('\n========================================================\n');
-    
-    // OpenAI'ye gönderilecek verilerden fuzzyRules'ı kaldır
-    const ogrenciCevaplariOpenAI = ogrenciCevaplari.map(({ fuzzyRules, ...rest }) => rest);
     
     // OpenAI API'ye istek gönder
     const completion = await openai.chat.completions.create({
