@@ -170,6 +170,19 @@ exports.analyzeStudentSurveys = async (req, res) => {
     // Genel analiz için fuzzy model oluştur
     const genelFuzzyModel = buildDynamicModel(genelMaxPuan || 100);
     
+    // Genel fuzzy model bilgilerini logla
+    console.log('\n=== GENEL ANALİZ - BULANIK MANTIK MODELİ ===');
+    console.log(`Maksimum Puan: ${genelMaxPuan}`);
+    console.log('Giriş Üyelik Fonksiyonları (Input MF):');
+    console.log(`  - Low: [${genelFuzzyModel.inputMF.low.join(', ')}]`);
+    console.log(`  - Mid: [${genelFuzzyModel.inputMF.mid.join(', ')}]`);
+    console.log(`  - High: [${genelFuzzyModel.inputMF.high.join(', ')}]`);
+    console.log('Çıkış Üyelik Fonksiyonları (Output MF):');
+    console.log(`  - Low: [${genelFuzzyModel.outputMF.low.join(', ')}]`);
+    console.log(`  - Mid: [${genelFuzzyModel.outputMF.mid.join(', ')}]`);
+    console.log(`  - High: [${genelFuzzyModel.outputMF.high.join(', ')}]`);
+    console.log('===========================================\n');
+    
     const ogrenciCevaplari = anketSonuclari.map(sonuc => {
       const ogrenci = ogrenciler.find(o => o._id.toString() === sonuc.ogrenciId.toString());
       const cevaplar = sonuc.cevaplar || sonuc.sonuc;
@@ -187,7 +200,8 @@ exports.analyzeStudentSurveys = async (req, res) => {
         soyad: ogrenci?.soyad || 'Bilinmiyor',
         cevaplar: cevaplar,
         olcekPuani: olcekPuani,
-        fuzzySkor: Math.round(fuzzySkor * 100) / 100 // İki ondalık basamağa yuvarla
+        fuzzySkor: Math.round(fuzzySkor * 100) / 100, // İki ondalık basamağa yuvarla
+        fuzzyRules: rules // Detaylı log için sakla
       };
     });
     
@@ -223,17 +237,28 @@ Analizi bilimsel ve sade bir dille yap. Ek açıklama, yorum ya da kod bloğu ek
 Yalnızca yukarıdaki JSON formatında yanıt ver.
 
 Öğrenci Verileri:
-${JSON.stringify(ogrenciCevaplari, null, 2)}`;
+${JSON.stringify(ogrenciCevaplariOpenAI, null, 2)}`;
     
     console.log('\n=== OpenAI Analiz İsteği ===');
     console.log('Rehber:', rehber.ad, rehber.soyad);
     console.log('Öğrenci sayısı:', ogrenciler.length);
     console.log('Anket sonucu sayısı:', anketSonuclari.length);
     
-    // Ölçek puanlarını ve fuzzy skorlarını logla
+    // Ölçek puanlarını ve detaylı fuzzy skorlarını logla
+    console.log('\n=== GENEL ANALİZ - ÖĞRENCİ BULANIK MANTIK SKORLARI ===');
     ogrenciCevaplari.forEach(ogr => {
-      console.log(`- ${ogr.ad} ${ogr.soyad}: Ölçek Puanı = ${ogr.olcekPuani}, Fuzzy Skor = ${ogr.fuzzySkor}`);
+      console.log(`\n📊 ${ogr.ad} ${ogr.soyad}:`);
+      console.log(`   Ölçek Puanı: ${ogr.olcekPuani}`);
+      console.log(`   Üyelik Fonksiyon Değerleri:`);
+      console.log(`     - Low (Düşük): ${Math.round(ogr.fuzzyRules.low * 1000) / 1000}`);
+      console.log(`     - Mid (Orta): ${Math.round(ogr.fuzzyRules.mid * 1000) / 1000}`);
+      console.log(`     - High (Yüksek): ${Math.round(ogr.fuzzyRules.high * 1000) / 1000}`);
+      console.log(`   Fuzzy Skor (Defuzzification): ${ogr.fuzzySkor}`);
     });
+    console.log('\n========================================================\n');
+    
+    // OpenAI'ye gönderilecek verilerden fuzzyRules'ı kaldır
+    const ogrenciCevaplariOpenAI = ogrenciCevaplari.map(({ fuzzyRules, ...rest }) => rest);
     
     // OpenAI API'ye istek gönder
     const completion = await openai.chat.completions.create({
@@ -299,6 +324,18 @@ ${JSON.stringify(ogrenciCevaplari, null, 2)}`;
       // Bu anket için fuzzy model oluştur
       const anketFuzzyModel = buildDynamicModel(anketMaxPuan || 100);
       
+      // Anket bazlı fuzzy model bilgilerini logla
+      console.log(`\n=== ANKET BAZLI ANALİZ - ${anket.baslik.toUpperCase()} ===`);
+      console.log(`Maksimum Puan: ${anketMaxPuan}`);
+      console.log('Giriş Üyelik Fonksiyonları (Input MF):');
+      console.log(`  - Low: [${anketFuzzyModel.inputMF.low.join(', ')}]`);
+      console.log(`  - Mid: [${anketFuzzyModel.inputMF.mid.join(', ')}]`);
+      console.log(`  - High: [${anketFuzzyModel.inputMF.high.join(', ')}]`);
+      console.log('Çıkış Üyelik Fonksiyonları (Output MF):');
+      console.log(`  - Low: [${anketFuzzyModel.outputMF.low.join(', ')}]`);
+      console.log(`  - Mid: [${anketFuzzyModel.outputMF.mid.join(', ')}]`);
+      console.log(`  - High: [${anketFuzzyModel.outputMF.high.join(', ')}]`);
+      
       // Bu anket için öğrenci cevaplarını hazırla
       const anketOgrenciCevaplari = anketSonuclariBuAnket.map(sonuc => {
         const ogrenci = ogrenciler.find(o => o._id.toString() === sonuc.ogrenciId.toString());
@@ -315,9 +352,26 @@ ${JSON.stringify(ogrenciCevaplari, null, 2)}`;
           soyad: ogrenci?.soyad || 'Bilinmiyor',
           cevaplar: cevaplar,
           olcekPuani: anketPuani,
-          fuzzySkor: Math.round(fuzzySkor * 100) / 100 // İki ondalık basamağa yuvarla
+          fuzzySkor: Math.round(fuzzySkor * 100) / 100, // İki ondalık basamağa yuvarla
+          fuzzyRules: rules // Detaylı log için sakla
         };
       });
+      
+      // Bu anket için öğrenci fuzzy skorlarını logla
+      console.log('\nÖğrenci Bulanık Mantık Skorları:');
+      anketOgrenciCevaplari.forEach(ogr => {
+        console.log(`\n  📊 ${ogr.ad} ${ogr.soyad}:`);
+        console.log(`     Ölçek Puanı: ${ogr.olcekPuani}`);
+        console.log(`     Üyelik Fonksiyon Değerleri:`);
+        console.log(`       - Low (Düşük): ${Math.round(ogr.fuzzyRules.low * 1000) / 1000}`);
+        console.log(`       - Mid (Orta): ${Math.round(ogr.fuzzyRules.mid * 1000) / 1000}`);
+        console.log(`       - High (Yüksek): ${Math.round(ogr.fuzzyRules.high * 1000) / 1000}`);
+        console.log(`     Fuzzy Skor (Defuzzification): ${ogr.fuzzySkor}`);
+      });
+      console.log('===================================================\n');
+      
+      // OpenAI'ye gönderilecek verilerden fuzzyRules'ı kaldır
+      const anketOgrenciCevaplariOpenAI = anketOgrenciCevaplari.map(({ fuzzyRules, ...rest }) => rest);
       
       // Bu anket için OpenAI analizi yap
       const anketPrompt = `Sen bir orta okul psikolojik danışmanısın.
@@ -357,7 +411,7 @@ Analizi bilimsel ve sade bir dille yap. Ek açıklama, yorum ya da kod bloğu ek
 Yalnızca yukarıdaki JSON formatında yanıt ver.
 
 Öğrenci Verileri:
-${JSON.stringify(anketOgrenciCevaplari, null, 2)}`;
+${JSON.stringify(anketOgrenciCevaplariOpenAI, null, 2)}`;
       
       try {
         const anketCompletion = await openai.chat.completions.create({
@@ -434,6 +488,22 @@ ${JSON.stringify(anketOgrenciCevaplari, null, 2)}`;
       
       ogrenciAnketPuaniDetaylari[ogrenciId] = anketPuaniListesi;
     });
+    
+    // Öğrenci bazlı anket fuzzy skor özeti
+    console.log('\n=== ÖĞRENCİ BAZLI ANKET FUZZY SKOR ÖZETİ ===');
+    ogrenciAnketPuaniMap.forEach((anketPuaniMap, ogrenciId) => {
+      const ogrenci = ogrenciler.find(o => o._id.toString() === ogrenciId);
+      if (ogrenci) {
+        console.log(`\n👤 ${ogrenci.ad} ${ogrenci.soyad}:`);
+        const detaylar = ogrenciAnketPuaniDetaylari[ogrenciId] || [];
+        detaylar.forEach(detay => {
+          console.log(`   📋 ${detay.anketBaslik}:`);
+          console.log(`      - Ölçek Puanı: ${detay.puan} / ${detay.soruSayisi * detay.secenekSayisi}`);
+          console.log(`      - Fuzzy Skor: ${detay.fuzzySkor}`);
+        });
+      }
+    });
+    console.log('============================================\n');
     
     // Analiz sonucunu rehber koleksiyonuna kaydet
     const analizKaydi = {
