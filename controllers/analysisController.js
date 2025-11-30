@@ -104,6 +104,89 @@ const defuzzify = (ruleStrengths, model) => {
   return den === 0 ? 0 : num / den;
 };
 
+// Son analiz tarihini bul (Çözüm 1)
+const getLastAnalysisDate = (analizSonuclari) => {
+  if (!analizSonuclari || analizSonuclari.length === 0) {
+    return null; // İlk analiz, tüm sonuçları al
+  }
+  // En son analizin tarihini döndür
+  const tarihler = analizSonuclari
+    .map(a => a.tarih ? new Date(a.tarih) : null)
+    .filter(Boolean);
+  
+  if (tarihler.length === 0) {
+    return null;
+  }
+  
+  return new Date(Math.max(...tarihler));
+};
+
+// Kullanılan anket sonuç ID'lerini topla (Çözüm 2)
+const getUsedSurveyResultIds = (analizSonuclari) => {
+  if (!analizSonuclari || analizSonuclari.length === 0) {
+    return new Set();
+  }
+  
+  // Tüm analizlerde kullanılan anket sonuç ID'lerini topla
+  const usedIds = new Set();
+  analizSonuclari.forEach(analiz => {
+    if (analiz.kullanilanAnketSonucIdleri && Array.isArray(analiz.kullanilanAnketSonucIdleri)) {
+      analiz.kullanilanAnketSonucIdleri.forEach(id => {
+        if (id) {
+          usedIds.add(id.toString());
+        }
+      });
+    }
+  });
+  
+  return usedIds;
+};
+
+// Yeni anket sonuçlarını filtrele (Çözüm 1 + Çözüm 2 kombinasyonu)
+const filterNewSurveyResults = (anketSonuclari, analizSonuclari) => {
+  if (!anketSonuclari || anketSonuclari.length === 0) {
+    return [];
+  }
+  
+  // İlk analiz ise tüm sonuçları döndür
+  if (!analizSonuclari || analizSonuclari.length === 0) {
+    return anketSonuclari;
+  }
+  
+  // Son analiz tarihini bul
+  const lastAnalysisDate = getLastAnalysisDate(analizSonuclari);
+  
+  // Kullanılan anket sonuç ID'lerini bul
+  const usedIds = getUsedSurveyResultIds(analizSonuclari);
+  
+  // Yeni sonuçları filtrele
+  const yeniSonuclar = anketSonuclari.filter(sonuc => {
+    // ID bazlı kontrol (Çözüm 2)
+    const sonucId = sonuc.id?.toString();
+    if (sonucId && usedIds.has(sonucId)) {
+      return false; // Bu sonuç daha önce kullanılmış
+    }
+    
+    // Tarih bazlı kontrol (Çözüm 1)
+    if (lastAnalysisDate && sonuc.completedAt) {
+      const sonucTarihi = new Date(sonuc.completedAt);
+      if (sonucTarihi > lastAnalysisDate) {
+        return true; // Son analizden sonra oluşturulmuş
+      }
+    }
+    
+    // Eğer tarih yoksa ama ID kullanılmamışsa yeni kabul et
+    if (!sonuc.completedAt && sonucId && !usedIds.has(sonucId)) {
+      return true;
+    }
+    
+    // Diğer durumlar: eski sonuç
+    return false;
+  });
+  
+  return yeniSonuclar;
+};
+
 // Rehberin öğrencilerinin anket sonuçlarını analiz et
 exports.analyzeStudentSurveys = async (req, res) => {
   try {
@@ -126,11 +209,49 @@ exports.analyzeStudentSurveys = async (req, res) => {
     }
     
     // Anket sonuçlarını topla
-    const anketSonuclari = rehber.rehberDetay.anket_sonuclari || [];
+    const tumAnketSonuclari = rehber.rehberDetay.anket_sonuclari || [];
     
-    if (anketSonuclari.length === 0) {
+    if (tumAnketSonuclari.length === 0) {
       return sendBadRequest(res, 'Analiz edilecek anket sonucu bulunamadı');
     }
+    
+    // Yeni anket sonuçlarını filtrele (Çözüm 1 + Çözüm 2)
+    const analizSonuclari = rehber.rehberDetay.analizSonuclari || [];
+    const anketSonuclari = filterNewSurveyResults(tumAnketSonuclari, analizSonuclari);
+    
+    // Yeni sonuç kontrolü
+    if (anketSonuclari.length === 0) {
+      const lastAnalysisDate = getLastAnalysisDate(analizSonuclari);
+      const lastAnalysisDateStr = lastAnalysisDate 
+        ? new Date(lastAnalysisDate).toLocaleDateString('tr-TR', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+        : 'henüz analiz yapılmamış';
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Yeni analiz edilecek anket sonucu bulunamadı',
+        info: `Son analiz: ${lastAnalysisDateStr}. Yeni anket sonuçları ekledikten sonra tekrar deneyin.`,
+        lastAnalysisDate: lastAnalysisDate,
+        totalSurveyResults: tumAnketSonuclari.length,
+        usedSurveyResults: tumAnketSonuclari.length - anketSonuclari.length
+      });
+    }
+    
+    // Log: Yeni sonuç bilgisi
+    console.log('\n=== YENİ ANALİZ FİLTRELEME ===');
+    console.log(`Toplam anket sonucu: ${tumAnketSonuclari.length}`);
+    console.log(`Yeni anket sonucu: ${anketSonuclari.length}`);
+    console.log(`Daha önce analiz edilmiş: ${tumAnketSonuclari.length - anketSonuclari.length}`);
+    if (analizSonuclari.length > 0) {
+      const lastAnalysisDate = getLastAnalysisDate(analizSonuclari);
+      console.log(`Son analiz tarihi: ${lastAnalysisDate ? new Date(lastAnalysisDate).toLocaleString('tr-TR') : 'Yok'}`);
+    }
+    console.log('================================\n');
     
     // Öğrenci bilgileriyle anket sonuçlarını birleştir ve ölçek puanı hesapla
     // Her öğrenci için anket bazlı puanları da hesapla
@@ -523,6 +644,11 @@ ${JSON.stringify(anketOgrenciCevaplariOpenAI, null, 2)}`;
     console.log('============================================\n');
     
     // Analiz sonucunu rehber koleksiyonuna kaydet
+    // Kullanılan anket sonuç ID'lerini topla (Çözüm 2)
+    const kullanilanAnketSonucIdleri = anketSonuclari
+      .map(sonuc => sonuc.id?.toString())
+      .filter(Boolean);
+    
     const analizKaydi = {
       id: new Date().getTime().toString(),
       tarih: new Date(),
@@ -530,7 +656,8 @@ ${JSON.stringify(anketOgrenciCevaplariOpenAI, null, 2)}`;
       ogrenciSayisi: ogrenciler.length,
       anketSayisi: anketSonuclari.length,
       kullanilanAnketler: kullanilanAnketler,
-      ogrenciAnketPuaniDetaylari: ogrenciAnketPuaniDetaylari
+      ogrenciAnketPuaniDetaylari: ogrenciAnketPuaniDetaylari,
+      kullanilanAnketSonucIdleri: kullanilanAnketSonucIdleri // Çözüm 2: Hangi sonuçlar kullanıldı
     };
     
     // rehberDetay objesini yeniden oluştur (Mongoose Mixed type için)
@@ -551,7 +678,12 @@ ${JSON.stringify(anketOgrenciCevaplariOpenAI, null, 2)}`;
     res.json({
       success: true,
       message: 'Analiz başarıyla tamamlandı',
-      analiz: analizSonucu
+      analiz: analizSonucu,
+      analizBilgisi: {
+        yeniAnketSonucSayisi: anketSonuclari.length,
+        toplamAnketSonucSayisi: tumAnketSonuclari.length,
+        analizTarihi: new Date().toISOString()
+      }
     });
     
   } catch (err) {
