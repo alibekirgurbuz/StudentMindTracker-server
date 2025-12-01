@@ -329,20 +329,49 @@ exports.analyzeStudentSurveys = async (req, res) => {
     // OpenAI'ye gönderilecek verilerden fuzzyRules'ı kaldır
     const ogrenciCevaplariOpenAI = ogrenciCevaplari.map(({ fuzzyRules, ...rest }) => rest);
     
-    // OpenAI'ye gönderilecek prompt
-    const prompt = `Sen bir orta okul psikolojik danışmanısın.
-Aşağıda öğrencilerin anket cevapları ve ölçek puanları yer alıyor.
-Veriler JSON formatında, her öğrencinin cevapları "ogrenciID", "ad", "soyad", "cevaplar" ve "olcekPuani" alanlarını içeriyor.
+    // OpenAI'ye gönderilecek prompt (geliştirilmiş, psikolojik danışman odaklı)
+    const prompt = `Sen Türkiye’de bir ortaokulda çalışan, deneyimli bir psikolojik danışman ve rehber öğretmensin.
 
-**Ölçek Puanı Hesaplama:** Her sorunun cevabı için, seçeneğin indis değerinin bir fazlası (indis 0 → puan 1, indis 1 → puan 2, vb.) toplanarak öğrencinin genel ölçek puanı hesaplanmıştır.
+Aşağıda bir rehber öğretmenin öğrencilerine uyguladığı çeşitli psikolojik ölçek ve anketlerin sonuçları yer alıyor.
+Veriler JSON formatında; her öğrenci için:
+- "ogrenciID"
+- "ad"
+- "soyad"
+- "cevaplar"
+- "olcekPuani" (ham puan)
+- "fuzzySkor" (0–100 arası risk düzeyi skoru; yüksek skor = daha yüksek risk)
 
-Görevin:
-1. Her öğrencinin anket cevaplarını ve ölçek puanını analiz et.
-2. Ölçek puanını dikkate alarak duygusal durum, dikkat düzeyi, sosyal uyum ve stres belirtilerine dair kısa ama profesyonel bir psikolojik değerlendirme yaz.
-3. Ardından tüm öğrencileri dikkate alarak genel bir sınıf analizi oluştur.
+Bu veriler, öğrencilerin duygusal durum, dikkat-dürtü kontrolü, kaygı ve stres belirtileri, sosyal uyum ve okul iklimine ilişkin algıları hakkında ipuçları içermektedir.
 
-Çıktıyı tam geçerli JSON formatında döndür.
-Alan adları Türkçe ve küçük harflerle olmalı.
+ÖNEMLİ İLKELER:
+- Kesin psikiyatrik tanılar KOYMA. “Bu öğrenci depresyondur” gibi cümleler kurma.
+- Onun yerine “belirti düzeyi”, “risk görünümü”, “dikkat gerektiren alanlar” gibi ifadeler kullan.
+- Öğrenciyi asla suçlayıcı veya damgalayıcı bir dille tanımlama.
+- Her zaman hem RİSKLERİ hem de GÜÇLÜ YÖNLERİ belirt.
+- Sonuçları, öğretmenin ve rehberin sınıf içi gözlemleriyle birleştirilmesi gereken ön değerlendirme olarak düşün.
+- Öğrenci mahremiyetine saygılı, özenli ve pedagojik bir dil kullan.
+
+GÖREVİN:
+1. Her öğrenci için:
+   - Ölçek puanları ve fuzzySkor temelinde,
+   - Aşağıdaki başlıklar çerçevesinde kısa ama anlamlı bir değerlendirme yap:
+     - duygusal durum (duygu dalgalanmaları, kaygı, mutsuzluk vb.)
+     - dikkat ve dürtü kontrolü (derse odaklanma, unutkanlık, acelecilik vb.)
+     - sosyal uyum (arkadaş ilişkileri, yalnızlık, çatışma eğilimi vb.)
+     - stres ve başa çıkma tarzı (sınav kaygısı, aile/sınıf kaynaklı zorlanmalar vb.)
+   - Her değerlendirmede:
+     - Gözlenen olası risk alanlarını,
+     - Mevcut güçlü yönleri ve koruyucu faktörleri,
+     - Kısa ve uygulanabilir önerileri (sınıf içi düzenleme, bireysel görüşme, veli ile işbirliği vb.) belirt.
+
+2. Tüm öğrencileri birlikte ele alarak:
+   - Sınıf genelinde öne çıkan ortak temaları (örneğin yaygın sınav kaygısı, iletişim sorunları, motivasyon düşüklüğü),
+   - Güçlü yönleri (destekleyici arkadaşlık ilişkileri, işbirlikçi sınıf iklimi vb.),
+   - Rehberlik servisi ve sınıf öğretmeni/branş öğretmenleri için somut önerileri içeren bir “genel sınıf değerlendirmesi” yaz.
+
+ÇIKTI FORMATIN:
+- Tam geçerli JSON döndür.
+- Alan adları TÜRKÇE ve küçük harflerle olsun.
 Biçim tam olarak şu şekilde olmalı:
 {
   "ogrenciler": [
@@ -351,14 +380,27 @@ Biçim tam olarak şu şekilde olmalı:
       "ad": "",
       "soyad": "",
       "olcekPuani": 0,
-      "analiz": "..."
+      "fuzzySkor": 0,
+      "risk_duzeyi": "düşük" | "orta" | "yüksek",
+      "guclu_yonler": "",
+      "risk_alanlari": "",
+      "oneriler": "",
+      "analiz": ""
     }
   ],
-  "genel_degerlendirme": "..."
+  "genel_degerlendirme": {
+    "sinif_ozeti": "",
+    "yaygin_tema_ve_riskler": "",
+    "sinifin_guclu_yonleri": "",
+    "onerilen_mudahale_ve_calismalar": ""
+  }
 }
 
-Analizi bilimsel ve sade bir dille yap. Ek açıklama, yorum ya da kod bloğu ekleme.
-Yalnızca yukarıdaki JSON formatında yanıt ver.
+DİKKAT:
+- Ek açıklama, yorum ya da kod bloğu ekleme.
+- Yalnızca yukarıdaki JSON formatında yanıt ver.
+- Dilin sakin, destekleyici ve profesyonel olsun.
+- Öğrencileri asla yargılayıcı bir dille tanımlama.
 
 Öğrenci Verileri:
 ${JSON.stringify(ogrenciCevaplariOpenAI, null, 2)}`;
@@ -494,28 +536,51 @@ ${JSON.stringify(ogrenciCevaplariOpenAI, null, 2)}`;
       // OpenAI'ye gönderilecek verilerden fuzzyRules'ı kaldır
       const anketOgrenciCevaplariOpenAI = anketOgrenciCevaplari.map(({ fuzzyRules, ...rest }) => rest);
       
-      // Bu anket için OpenAI analizi yap
-      const anketPrompt = `Sen bir orta okul psikolojik danışmanısın.
-Aşağıda "${anket.baslik}" anketini çözen öğrencilerin cevapları ve ölçek puanları yer alıyor.
-Veriler JSON formatında, her öğrencinin cevapları "ogrenciID", "ad", "soyad", "cevaplar" ve "olcekPuani" alanlarını içeriyor.
+      // Bu anket için OpenAI analizi yap (geliştirilmiş, anket odaklı prompt)
+      const anketPrompt = `Sen Türkiye’de bir ortaokulda çalışan, deneyimli bir psikolojik danışman ve rehber öğretmensin.
 
-**Ölçek Puanı Hesaplama:** Her sorunun cevabı için, seçeneğin indis değerinin bir fazlası (indis 0 → puan 1, indis 1 → puan 2, vb.) toplanarak öğrencinin bu anket için ölçek puanı hesaplanmıştır.
+Aşağıda "${anket.baslik}" ölçeğini/anketini çözen öğrencilerin sonuçları yer alıyor.
+Veriler JSON formatında; her öğrenci için:
+- "ogrenciID"
+- "ad"
+- "soyad"
+- "cevaplar"
+- "olcekPuani" (sadece bu ankete ait ham puan)
+- "fuzzySkor" (0–100 arası risk düzeyi skoru; yüksek skor = daha yüksek risk)
 
-**Anket Bilgileri:**
+Anket Bilgileri:
 - Anket Adı: ${anket.baslik}
 - Soru Sayısı: ${anket.soruSayisi}
 - Seçenek Sayısı: ${anket.secenekSayisi}
 - Minimum Puan: ${anket.soruSayisi}
 - Maksimum Puan: ${anket.soruSayisi * anket.secenekSayisi}
 
-Görevin:
-1. Her öğrencinin bu anket için cevaplarını ve ölçek puanını analiz et.
-2. Ölçek puanını dikkate alarak bu anket kapsamındaki alanlara (duygusal durum, dikkat düzeyi, sosyal uyum, stres belirtileri vb.) özel olarak kısa ama profesyonel bir psikolojik değerlendirme yaz.
-3. Her öğrenci için bu anketin spesifik alanlarına odaklan.
+BU ANKET NEYİ ÖLÇÜYOR?
+Bu anket; öğrencilerin özellikle ${anket.baslik} ile ilişkili alanlarda (örneğin stres belirtileri, kaygı düzeyi, psikolojik dayanıklılık, dikkat sorunları, sosyal uyum vb.) yaşadıkları güçlükler ve güçlü yönler hakkında ipuçları verir.
 
-Çıktıyı tam geçerli JSON formatında döndür.
-Alan adları Türkçe ve küçük harflerle olmalı.
-Biçim tam olarak şu şekilde olmalı:
+İLKELER:
+- Psikiyatrik tanı koyma, etiketleyici ifadeler kullanma.
+- “Belirti düzeyi”, “risk görünümü”, “dikkat gerektiren alanlar” gibi ifadeler kullan.
+- Mutlaka güçlü yönlere de yer ver.
+- Öğretmen, rehber ve veli için kısa ve uygulanabilir öneriler üret.
+
+GÖREVİN:
+1. Her öğrenci için:
+   - Bu ankete ait olcekPuani ve fuzzySkor’a dayanarak,
+   - Aşağıdaki başlıklara odaklanan kısa bir analiz yaz:
+     - Bu anketin ölçtüğü alanda güçlü yönler
+     - Belirti / risk düzeyi (düşük, orta, yüksek)
+     - Sınıf içinde veya evde gözlenebilecek olası davranış örnekleri
+     - Öğrenci için kısa, uygulanabilir öneriler
+2. Her öğrencinin "risk_duzeyi" alanını:
+   - fuzzySkor < 40 ise "düşük"
+   - 40–60 arası ise "orta"
+   - 60 üstü ise "yüksek"
+   olarak değerlendir.
+
+ÇIKTI FORMATIN:
+Yalnızca şu JSON formatında yanıt ver:
+
 {
   "ogrenciler": [
     {
@@ -523,13 +588,18 @@ Biçim tam olarak şu şekilde olmalı:
       "ad": "",
       "soyad": "",
       "olcekPuani": 0,
-      "analiz": "..."
+      "fuzzySkor": 0,
+      "risk_duzeyi": "düşük" | "orta" | "yüksek",
+      "guclu_yonler": "",
+      "risk_alanlari": "",
+      "oneriler": "",
+      "analiz": ""
     }
   ]
 }
 
-Analizi bilimsel ve sade bir dille yap. Ek açıklama, yorum ya da kod bloğu ekleme.
-Yalnızca yukarıdaki JSON formatında yanıt ver.
+Ek açıklama, yorum veya kod bloğu ekleme.
+Dilin, rehberlik servisi raporuna girebilecek kadar profesyonel ve dengeli olsun.
 
 Öğrenci Verileri:
 ${JSON.stringify(anketOgrenciCevaplariOpenAI, null, 2)}`;
