@@ -445,14 +445,8 @@ ${JSON.stringify(ogrenciCevaplariOpenAI, null, 2)}`;
       // Bu anket için fuzzy model oluştur
       const anketFuzzyModel = buildDynamicModel(anketMaxPuan || 100);
       
-      // "16 Kasım Anketi" için ters puanlama kontrolü
-      const isTersPuanlama = anket.baslik === '16 Kasım Anketi';
-      
       // Anket bazlı fuzzy model bilgilerini logla
       console.log(`\n=== ANKET BAZLI ANALİZ - ${anket.baslik.toUpperCase()} ===`);
-      if (isTersPuanlama) {
-        console.log('⚠️  TERS PUANLAMA: Bu anket için yüksek puan pozitif (düşük risk), düşük puan negatif (yüksek risk) olarak değerlendirilecektir.');
-      }
       console.log(`Maksimum Puan: ${anketMaxPuan}`);
       console.log('Giriş Üyelik Fonksiyonları (Input MF):');
       console.log(`  - Low: [${anketFuzzyModel.inputMF.low.join(', ')}]`);
@@ -469,14 +463,9 @@ ${JSON.stringify(ogrenciCevaplariOpenAI, null, 2)}`;
         const cevaplar = sonuc.cevaplar || sonuc.sonuc;
         const anketPuani = hesaplaOlcekPuani(cevaplar);
         
-        // Fuzzy skor hesapla
+        // Fuzzy skor hesapla (her ankette: puan arttıkça risk/artış)
         const rules = applyRules(anketPuani, anketFuzzyModel);
-        let fuzzySkor = defuzzify(rules, anketFuzzyModel);
-        
-        // "16 Kasım Anketi" için ters puanlama: yüksek puan → pozitif (düşük fuzzy skor)
-        if (isTersPuanlama) {
-          fuzzySkor = 100 - fuzzySkor;
-        }
+        const fuzzySkor = defuzzify(rules, anketFuzzyModel);
         
         return {
           ogrenciID: sonuc.ogrenciId,
@@ -604,13 +593,7 @@ ${JSON.stringify(anketOgrenciCevaplariOpenAI, null, 2)}`;
           const anketMaxPuan = anket.soruSayisi * anket.secenekSayisi;
           const anketFuzzyModel = buildDynamicModel(anketMaxPuan || 100);
           const rules = applyRules(puan, anketFuzzyModel);
-          let fuzzySkor = defuzzify(rules, anketFuzzyModel);
-          
-          // "16 Kasım Anketi" için ters puanlama: yüksek puan → pozitif (düşük fuzzy skor)
-          const isTersPuanlama = anket.baslik === '16 Kasım Anketi';
-          if (isTersPuanlama) {
-            fuzzySkor = 100 - fuzzySkor;
-          }
+          const fuzzySkor = defuzzify(rules, anketFuzzyModel);
           
           anketPuaniListesi.push({
             anketId: anketId,
